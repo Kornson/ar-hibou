@@ -172,18 +172,13 @@ function checkMarker(markerRoot) {
   else   { hint.classList.remove('hidden'); hint.textContent = '🔍 Cherchez le marqueur…'; }
 }
 
-/* ── INSPECT ARjs EXPORTS ── */
-window.addEventListener('load', () => {
-  dbg('ARjs keys: ' + Object.keys(ARjs || {}).join(', '));
-});
-
 /* ── DEBUG ── */
 const dbgEl = document.getElementById('dbg');
 const log = [];
 function dbg(msg) {
   log.push(msg);
   dbgEl.style.display = 'block';
-  dbgEl.textContent = log.slice(-10).join('\n');
+  dbgEl.textContent = log.slice(-12).join('\n');
 }
 
 /* ── START ── */
@@ -191,47 +186,44 @@ btnStart.addEventListener('click', () => {
   document.getElementById('overlay').style.display = 'none';
   dbg('▶ clic start');
 
-  const arSource = new ARjs.Source({ sourceType: 'webcam' });
-  const arContext = new ARjs.Context({
-    cameraParametersUrl: 'camera_para.dat',
-    detectionMode: 'mono',
-    trackingBackend: 'artoolkit',
-    canvasWidth: 640,
-    canvasHeight: 480,
-    maxDetectionRate: 30,
-    matrixCodeType: '3x3',
-    labelingMode: 'black_region',
-    patternRatio: 0.5,
-    imageSmoothingEnabled: false,
+  // AR.js 3.x : Session gère source + context + resize
+  const arSession = new ARjs.Session({
+    renderer: renderer,
+    camera: camera,
+    scene: scene,
+    sourceParameters: { sourceType: 'webcam' },
+    contextParameters: {
+      cameraParametersUrl: 'camera_para.dat',
+      detectionMode: 'mono',
+      trackingBackend: 'artoolkit',
+      canvasWidth: 640,
+      canvasHeight: 480,
+      maxDetectionRate: 30,
+      matrixCodeType: '3x3',
+      labelingMode: 'black_region',
+      patternRatio: 0.5,
+    },
   });
-  dbg('ARjs.Source + Context créés');
+  dbg('ARjs.Session créé');
 
-  arSource.init(() => {
-    dbg('arSource.init OK — vidéo prête');
-    arSource.onResize(arContext, renderer, camera);
-  }, (err) => {
-    dbg('❌ caméra: ' + err);
-    alert('Caméra inaccessible : ' + err);
-  });
-
-  window.addEventListener('arjs-video-loaded', () => {
-    dbg('arjs-video-loaded reçu');
-    arContext.init(() => {
-      dbg('arContext.init OK — arController: ' + (arContext.arController ? 'ok' : 'null'));
-      camera.projectionMatrix.copy(arContext.getProjectionMatrix());
-    });
+  // Projection matrix mise à jour après init
+  arSession.arContext.addEventListener('initialized', () => {
+    dbg('arContext initialized — arController: ' + (arSession.arContext.arController ? 'ok' : 'null'));
+    camera.projectionMatrix.copy(arSession.arContext.getProjectionMatrix());
   });
 
-  window.addEventListener('resize', () => arSource.onResize(arContext, renderer, camera));
-
-  const markerRoot = new THREE.Group();
-  scene.add(markerRoot);
-  new ARjs.ArMarkerControls(arContext, markerRoot, { type: 'pattern', patternUrl: 'markers/hiro.patt' });
-  dbg('MarkerControls créé');
+  // Anchor = marker + objet 3D attaché, API officielle AR.js 3.x
+  const anchor = new ARjs.Anchor(arSession, {
+    type: 'pattern',
+    patternUrl: 'markers/hiro.patt',
+    changeMatrixMode: 'modelViewMatrix',
+    markersAreaEnabled: false,
+  });
+  dbg('ARjs.Anchor créé');
 
   owlScene.scale.setScalar(MODEL_SCALE);
   owlScene.position.set(0, MODEL_Y, 0);
-  markerRoot.add(owlScene);
+  anchor.object3d.add(owlScene);
 
   mixer = new THREE.AnimationMixer(owlScene);
   owlAnimations.forEach(clip => { actions[clip.name] = mixer.clipAction(clip); });
@@ -248,18 +240,13 @@ btnStart.addEventListener('click', () => {
   document.getElementById('controls').classList.add('visible');
   playAnim(DEFAULT_ANIM);
 
-  let frameCount = 0;
   (function animate() {
     requestAnimationFrame(animate);
-    if (arSource.ready) {
-      arContext.update(arSource.domElement);
-      checkMarker(markerRoot);
-    }
+    arSession.update();
+    anchor.update();
+    checkMarker(anchor.object3d);
     if (mixer) mixer.update(clock.getDelta());
     renderer.render(scene, camera);
-    frameCount++;
-    if (frameCount === 60) dbg('60 frames ok — source.ready=' + arSource.ready);
-    if (frameCount === 60) dbg('arController=' + (arContext.arController ? 'ok' : 'null'));
   })();
 });
 </script>
