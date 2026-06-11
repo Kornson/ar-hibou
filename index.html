@@ -172,6 +172,11 @@ function checkMarker(markerRoot) {
   else   { hint.classList.remove('hidden'); hint.textContent = '🔍 Cherchez le marqueur…'; }
 }
 
+/* ── INSPECT ARjs EXPORTS ── */
+window.addEventListener('load', () => {
+  dbg('ARjs keys: ' + Object.keys(ARjs || {}).join(', '));
+});
+
 /* ── DEBUG ── */
 const dbgEl = document.getElementById('dbg');
 const log = [];
