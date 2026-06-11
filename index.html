@@ -191,10 +191,13 @@ btnStart.addEventListener('click', () => {
     cameraParametersUrl: 'camera_para.dat',
     detectionMode: 'mono',
     trackingBackend: 'artoolkit',
-    canvasWidth: 320,
-    canvasHeight: 240,
+    canvasWidth: 640,
+    canvasHeight: 480,
     maxDetectionRate: 30,
-    debug: true,
+    matrixCodeType: '3x3',
+    labelingMode: 'black_region',
+    patternRatio: 0.5,
+    imageSmoothingEnabled: false,
   });
   dbg('ARjs.Source + Context créés');
 
