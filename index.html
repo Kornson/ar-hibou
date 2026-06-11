@@ -49,6 +49,13 @@
       z-index: 50; pointer-events: none; white-space: nowrap; transition: opacity .5s;
     }
     #hint.hidden { opacity: 0; }
+    #dbg {
+      position: fixed; top: 3.5rem; left: .5rem; right: .5rem;
+      background: rgba(0,0,0,.75); color: #0f0;
+      font-size: .7rem; font-family: monospace; padding: .5rem;
+      border-radius: .5rem; z-index: 200; pointer-events: none;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -62,6 +69,7 @@
 </div>
 
 <div id="hint">🔍 Cherchez le marqueur…</div>
+<div id="dbg"></div>
 <div id="controls"><div id="anim-buttons"></div></div>
 
 <!-- Three.js r134 + AR.js — tous les assets en local, aucune dépendance CDN -->
@@ -164,9 +172,19 @@ function checkMarker(markerRoot) {
   else   { hint.classList.remove('hidden'); hint.textContent = '🔍 Cherchez le marqueur…'; }
 }
 
+/* ── DEBUG ── */
+const dbgEl = document.getElementById('dbg');
+const log = [];
+function dbg(msg) {
+  log.push(msg);
+  dbgEl.style.display = 'block';
+  dbgEl.textContent = log.slice(-10).join('\n');
+}
+
 /* ── START ── */
 btnStart.addEventListener('click', () => {
   document.getElementById('overlay').style.display = 'none';
+  dbg('▶ clic start');
 
   const arSource = new ARjs.Source({ sourceType: 'webcam' });
   const arContext = new ARjs.Context({
@@ -177,23 +195,30 @@ btnStart.addEventListener('click', () => {
     canvasHeight: 240,
     maxDetectionRate: 30,
   });
+  dbg('ARjs.Source + Context créés');
 
-  // Source d'abord — attendre arjs-video-loaded avant d'init le contexte (ordre obligatoire en v3)
   arSource.init(() => {
+    dbg('arSource.init OK — vidéo prête');
     arSource.onResize(arContext, renderer, camera);
-  }, (err) => { alert('Caméra inaccessible : ' + err); });
+  }, (err) => {
+    dbg('❌ caméra: ' + err);
+    alert('Caméra inaccessible : ' + err);
+  });
 
   window.addEventListener('arjs-video-loaded', () => {
-    arContext.init(() => camera.projectionMatrix.copy(arContext.getProjectionMatrix()));
+    dbg('arjs-video-loaded reçu');
+    arContext.init(() => {
+      dbg('arContext.init OK — arController: ' + (arContext.arController ? 'ok' : 'null'));
+      camera.projectionMatrix.copy(arContext.getProjectionMatrix());
+    });
   });
 
-  window.addEventListener('resize', () => {
-    arSource.onResize(arContext, renderer, camera);
-  });
+  window.addEventListener('resize', () => arSource.onResize(arContext, renderer, camera));
 
   const markerRoot = new THREE.Group();
   scene.add(markerRoot);
   new ARjs.MarkerControls(arContext, markerRoot, { type: 'pattern', patternUrl: 'markers/hiro.patt' });
+  dbg('MarkerControls créé');
 
   owlScene.scale.setScalar(MODEL_SCALE);
   owlScene.position.set(0, MODEL_Y, 0);
@@ -214,17 +239,18 @@ btnStart.addEventListener('click', () => {
   document.getElementById('controls').classList.add('visible');
   playAnim(DEFAULT_ANIM);
 
-  window.addEventListener('resize', () => {
-    arSource.onResizeElement();
-    arSource.copyElementSizeTo(renderer.domElement);
-    if (arContext.arController) arSource.copyElementSizeTo(arContext.arController.canvas);
-  });
-
+  let frameCount = 0;
   (function animate() {
     requestAnimationFrame(animate);
-    if (arSource.ready) { arContext.update(arSource.domElement); checkMarker(markerRoot); }
+    if (arSource.ready) {
+      arContext.update(arSource.domElement);
+      checkMarker(markerRoot);
+    }
     if (mixer) mixer.update(clock.getDelta());
     renderer.render(scene, camera);
+    frameCount++;
+    if (frameCount === 60) dbg('60 frames ok — source.ready=' + arSource.ready);
+    if (frameCount === 60) dbg('arController=' + (arContext.arController ? 'ok' : 'null'));
   })();
 });
 </script>
