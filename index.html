@@ -49,12 +49,12 @@
       z-index: 50; pointer-events: none; white-space: nowrap; transition: opacity .5s;
     }
     #hint.hidden { opacity: 0; }
-    #dbg {
-      position: fixed; top: 3.5rem; left: .5rem; right: .5rem;
-      background: rgba(0,0,0,.75); color: #0f0;
-      font-size: .7rem; font-family: monospace; padding: .5rem;
-      border-radius: .5rem; z-index: 200; pointer-events: none;
-      display: none;
+    #btnSite {
+      position: fixed; top: 1.2rem; right: 1rem;
+      background: rgba(0,0,0,.6); color: #fff;
+      border: 1px solid rgba(255,255,255,.3);
+      padding: .45rem 1rem; border-radius: 2rem; font-size: .82rem;
+      cursor: pointer; z-index: 50; text-decoration: none;
     }
   </style>
 </head>
@@ -69,7 +69,7 @@
 </div>
 
 <div id="hint">🔍 Cherchez le marqueur…</div>
-<div id="dbg"></div>
+<a id="btnSite" href="https://www.google.com" target="_blank">🌐 Site DMH</a>
 <div id="controls"><div id="anim-buttons"></div></div>
 
 <!-- Three.js r134 + AR.js — tous les assets en local, aucune dépendance CDN -->
@@ -172,21 +172,10 @@ function checkMarker(markerRoot) {
   else   { hint.classList.remove('hidden'); hint.textContent = '🔍 Cherchez le marqueur…'; }
 }
 
-/* ── DEBUG ── */
-const dbgEl = document.getElementById('dbg');
-const log = [];
-function dbg(msg) {
-  log.push(msg);
-  dbgEl.style.display = 'block';
-  dbgEl.textContent = log.slice(-12).join('\n');
-}
-
 /* ── START ── */
 btnStart.addEventListener('click', () => {
   document.getElementById('overlay').style.display = 'none';
-  dbg('▶ clic start');
 
-  // AR.js 3.x : Session gère source + context + resize
   const arSession = new ARjs.Session({
     renderer: renderer,
     camera: camera,
@@ -204,22 +193,17 @@ btnStart.addEventListener('click', () => {
       patternRatio: 0.5,
     },
   });
-  dbg('ARjs.Session créé');
 
-  // Projection matrix mise à jour après init
   arSession.arContext.addEventListener('initialized', () => {
-    dbg('arContext initialized — arController: ' + (arSession.arContext.arController ? 'ok' : 'null'));
     camera.projectionMatrix.copy(arSession.arContext.getProjectionMatrix());
   });
 
-  // Anchor = marker + objet 3D attaché, API officielle AR.js 3.x
   const anchor = new ARjs.Anchor(arSession, {
     type: 'pattern',
     patternUrl: 'markers/hiro.patt',
     changeMatrixMode: 'modelViewMatrix',
     markersAreaEnabled: false,
   });
-  dbg('ARjs.Anchor créé');
 
   owlScene.scale.setScalar(MODEL_SCALE);
   owlScene.position.set(0, MODEL_Y, 0);
