@@ -172,17 +172,24 @@ btnStart.addEventListener('click', () => {
   const arContext = new ARjs.Context({
     cameraParametersUrl: 'camera_para.dat',
     detectionMode: 'mono',
+    trackingBackend: 'artoolkit',
+    canvasWidth: 320,
+    canvasHeight: 240,
+    maxDetectionRate: 30,
   });
 
-  arContext.init(() => camera.projectionMatrix.copy(arContext.getProjectionMatrix()));
-
+  // Source d'abord — attendre arjs-video-loaded avant d'init le contexte (ordre obligatoire en v3)
   arSource.init(() => {
-    setTimeout(() => {
-      arSource.onResizeElement();
-      arSource.copyElementSizeTo(renderer.domElement);
-      if (arContext.arController) arSource.copyElementSizeTo(arContext.arController.canvas);
-    }, 500);
+    arSource.onResize(arContext, renderer, camera);
   }, (err) => { alert('Caméra inaccessible : ' + err); });
+
+  window.addEventListener('arjs-video-loaded', () => {
+    arContext.init(() => camera.projectionMatrix.copy(arContext.getProjectionMatrix()));
+  });
+
+  window.addEventListener('resize', () => {
+    arSource.onResize(arContext, renderer, camera);
+  });
 
   const markerRoot = new THREE.Group();
   scene.add(markerRoot);
