@@ -221,7 +221,7 @@ btnStart.addEventListener('click', () => {
 
   const markerRoot = new THREE.Group();
   scene.add(markerRoot);
-  new ARjs.MarkerControls(arContext, markerRoot, { type: 'pattern', patternUrl: 'markers/hiro.patt' });
+  new ARjs.ArMarkerControls(arContext, markerRoot, { type: 'pattern', patternUrl: 'markers/hiro.patt' });
   dbg('MarkerControls créé');
 
   owlScene.scale.setScalar(MODEL_SCALE);
