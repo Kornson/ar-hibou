@@ -196,6 +196,13 @@ btnStart.addEventListener('click', () => {
 
   arSession.arContext.addEventListener('initialized', () => {
     camera.projectionMatrix.copy(arSession.arContext.getProjectionMatrix());
+    // Réduire le near clip plane pour éviter que le modèle soit coupé de face
+    const m = camera.projectionMatrix.elements;
+    const far  = m[14] / (m[10] + 1);
+    const near = 0.01;
+    m[10] = (far + near) / (near - far);
+    m[14] = (2 * far * near) / (near - far);
+    camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
   });
 
   const anchor = new ARjs.Anchor(arSession, {
