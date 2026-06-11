@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>AR Hibou — DMH & Associés</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; font-family: system-ui, sans-serif; }
+    #overlay {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.92);
+      z-index: 100; color: #fff; text-align: center; padding: 2rem;
+    }
+    #overlay h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: .4rem; }
+    #overlay p  { font-size: .9rem; color: #999; margin-bottom: 2rem; line-height: 1.6; }
+    .logo {
+      width: 72px; height: 72px; border-radius: 16px;
+      background: #8B3A0F; display: flex; align-items: center;
+      justify-content: center; font-size: 2rem; margin-bottom: 1.5rem;
+    }
+    #btnStart {
+      background: #fff; color: #000; border: none;
+      padding: .85rem 2.5rem; border-radius: 2rem;
+      font-size: 1rem; font-weight: 600; cursor: pointer;
+    }
+    #btnStart:disabled { opacity: .5; cursor: wait; }
+    #status { margin-top: 1rem; font-size: .8rem; color: #666; min-height: 1.2em; }
+    #controls {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      padding: .75rem 1rem 1.2rem;
+      background: linear-gradient(transparent, rgba(0,0,0,.7));
+      z-index: 50; display: none; flex-direction: column; align-items: center; gap: .6rem;
+    }
+    #controls.visible { display: flex; }
+    #anim-buttons { display: flex; gap: .5rem; flex-wrap: wrap; justify-content: center; }
+    .anim-btn {
+      background: rgba(255,255,255,.15); color: #fff;
+      border: 1px solid rgba(255,255,255,.3);
+      padding: .45rem .9rem; border-radius: 2rem; font-size: .8rem; cursor: pointer;
+    }
+    .anim-btn.active { background: #fff; color: #000; border-color: #fff; }
+    #hint {
+      position: fixed; top: 1.2rem; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,.6); color: #fff;
+      padding: .45rem 1.1rem; border-radius: 2rem; font-size: .82rem;
+      z-index: 50; pointer-events: none; white-space: nowrap; transition: opacity .5s;
+    }
+    #hint.hidden { opacity: 0; }
+  </style>
+</head>
+<body>
+
+<div id="overlay">
+  <div class="logo">🦉</div>
+  <h1>Hibou DMH</h1>
+  <p>Pointez votre caméra sur le marqueur<br>pour faire apparaître le hibou en 3D.</p>
+  <button id="btnStart" disabled>Lancer la caméra</button>
+  <div id="status">Chargement…</div>
+</div>
+
+<div id="hint">🔍 Cherchez le marqueur…</div>
+<div id="controls"><div id="anim-buttons"></div></div>
+
+<!-- Three.js r134 + AR.js — tous les assets en local, aucune dépendance CDN -->
+<script src="three.min.js"></script>
+<script src="GLTFLoader.js"></script>
+<script src="DRACOLoader.js"></script>
+
+<script>
+const MODEL_PATH  = 'models/hibou-anim-final.glb';
+const MODEL_SCALE = 0.6;
+const MODEL_Y     = 0;
+
+const ANIM_LABELS = {
+  'Big_Wave_Hello':                '👋 Bonjour',
+  'Formal_Bow':                    '🙇 Salut',
+  'Hip_Hop_Dance':                 '🕺 Danse',
+  'Running':                       '🏃 Course',
+  'Short_Breathe_and_Look_Around': '😌 Idle',
+  'Walking':                       '🚶 Marche',
+};
+const DEFAULT_ANIM = 'Short_Breathe_and_Look_Around';
+
+const statusEl = document.getElementById('status');
+const btnStart  = document.getElementById('btnStart');
+
+/* ── RENDERER ── */
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.domElement.style.position = 'fixed';
+renderer.domElement.style.inset = '0';
+document.body.appendChild(renderer.domElement);
+
+const scene  = new THREE.Scene();
+const camera = new THREE.Camera();
+scene.add(camera);
+scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+const dir = new THREE.DirectionalLight(0xffffff, 1.2);
+dir.position.set(1, 2, 1);
+scene.add(dir);
+
+/* ── STATE ── */
+let mixer = null, actions = {}, currentAction = null, currentName = '';
+let arReady = false, modelReady = false;
+let owlScene = null, owlAnimations = [];
+const clock = new THREE.Clock();
+
+function checkReady() {
+  if (arReady && modelReady) {
+    statusEl.textContent = 'Prêt !';
+    btnStart.disabled = false;
+  }
+}
+
+/* ── LOAD MODEL ── */
+statusEl.textContent = 'Chargement du modèle…';
+const dracoLoader = new THREE.DRACOLoader();
+dracoLoader.setDecoderPath('draco/');
+const gltfLoader = new THREE.GLTFLoader();
+gltfLoader.setDRACOLoader(dracoLoader);
+
+gltfLoader.load(MODEL_PATH, (gltf) => {
+  owlScene      = gltf.scene;
+  owlAnimations = gltf.animations;
+  modelReady    = true;
+  statusEl.textContent = arReady ? 'Prêt !' : 'Initialisation AR…';
+  checkReady();
+}, undefined, (err) => {
+  statusEl.textContent = '❌ Erreur modèle';
+  console.error(err);
+});
+
+/* ── LOAD AR.JS ── */
+const arScript  = document.createElement('script');
+arScript.src    = 'ar.js';
+arScript.onload = () => { arReady = true; checkReady(); };
+arScript.onerror= () => { statusEl.textContent = '❌ Erreur AR.js'; };
+document.head.appendChild(arScript);
+
+/* ── PLAY ANIM ── */
+function playAnim(name) {
+  if (!actions[name] || name === currentName) return;
+  if (currentAction) currentAction.fadeOut(0.3);
+  actions[name].reset().fadeIn(0.3).play();
+  currentAction = actions[name];
+  currentName   = name;
+  document.querySelectorAll('.anim-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.anim === name)
+  );
+}
+
+/* ── MARKER HINT ── */
+let wasVisible = false;
+function checkMarker(markerRoot) {
+  const v = markerRoot.visible;
+  if (v === wasVisible) return;
+  wasVisible = v;
+  const hint = document.getElementById('hint');
+  if (v) { hint.textContent = '🦉 Hibou détecté !'; setTimeout(() => hint.classList.add('hidden'), 2000); }
+  else   { hint.classList.remove('hidden'); hint.textContent = '🔍 Cherchez le marqueur…'; }
+}
+
+/* ── START ── */
+btnStart.addEventListener('click', () => {
+  document.getElementById('overlay').style.display = 'none';
+
+  const arSource = new THREEx.ArToolkitSource({ sourceType: 'webcam' });
+  const arContext = new THREEx.ArToolkitContext({
+    cameraParametersUrl: 'camera_para.dat',
+    detectionMode: 'mono',
+  });
+
+  arContext.init(() => camera.projectionMatrix.copy(arContext.getProjectionMatrix()));
+
+  arSource.init(() => {
+    setTimeout(() => {
+      arSource.onResizeElement();
+      arSource.copyElementSizeTo(renderer.domElement);
+      if (arContext.arController) arSource.copyElementSizeTo(arContext.arController.canvas);
+    }, 500);
+  }, (err) => { alert('Caméra inaccessible : ' + err); });
+
+  const markerRoot = new THREE.Group();
+  scene.add(markerRoot);
+  new THREEx.ArMarkerControls(arContext, markerRoot, { type: 'preset', preset: 'hiro' });
+
+  owlScene.scale.setScalar(MODEL_SCALE);
+  owlScene.position.set(0, MODEL_Y, 0);
+  markerRoot.add(owlScene);
+
+  mixer = new THREE.AnimationMixer(owlScene);
+  owlAnimations.forEach(clip => { actions[clip.name] = mixer.clipAction(clip); });
+
+  const container = document.getElementById('anim-buttons');
+  owlAnimations.forEach(clip => {
+    const btn = document.createElement('button');
+    btn.className   = 'anim-btn';
+    btn.dataset.anim = clip.name;
+    btn.textContent  = ANIM_LABELS[clip.name] || clip.name;
+    btn.onclick = () => playAnim(clip.name);
+    container.appendChild(btn);
+  });
+  document.getElementById('controls').classList.add('visible');
+  playAnim(DEFAULT_ANIM);
+
+  window.addEventListener('resize', () => {
+    arSource.onResizeElement();
+    arSource.copyElementSizeTo(renderer.domElement);
+    if (arContext.arController) arSource.copyElementSizeTo(arContext.arController.canvas);
+  });
+
+  (function animate() {
+    requestAnimationFrame(animate);
+    if (arSource.ready) { arContext.update(arSource.domElement); checkMarker(markerRoot); }
+    if (mixer) mixer.update(clock.getDelta());
+    renderer.render(scene, camera);
+  })();
+});
+</script>
+</body>
+</html>
