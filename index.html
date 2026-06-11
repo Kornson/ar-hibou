@@ -168,8 +168,8 @@ function checkMarker(markerRoot) {
 btnStart.addEventListener('click', () => {
   document.getElementById('overlay').style.display = 'none';
 
-  const arSource = new THREEx.ArToolkitSource({ sourceType: 'webcam' });
-  const arContext = new THREEx.ArToolkitContext({
+  const arSource = new ARjs.Source({ sourceType: 'webcam' });
+  const arContext = new ARjs.Context({
     cameraParametersUrl: 'camera_para.dat',
     detectionMode: 'mono',
   });
@@ -186,7 +186,7 @@ btnStart.addEventListener('click', () => {
 
   const markerRoot = new THREE.Group();
   scene.add(markerRoot);
-  new THREEx.ArMarkerControls(arContext, markerRoot, { type: 'preset', preset: 'hiro' });
+  new ARjs.MarkerControls(arContext, markerRoot, { type: 'preset', preset: 'hiro' });
 
   owlScene.scale.setScalar(MODEL_SCALE);
   owlScene.position.set(0, MODEL_Y, 0);
