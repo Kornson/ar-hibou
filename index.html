@@ -207,6 +207,7 @@ btnStart.addEventListener('click', () => {
 
   owlScene.scale.setScalar(MODEL_SCALE);
   owlScene.position.set(0, MODEL_Y, 0);
+  owlScene.rotation.x = -Math.PI / 2; // hibou face vers la caméra (vue de face depuis le dessus)
   anchor.object3d.add(owlScene);
 
   mixer = new THREE.AnimationMixer(owlScene);
